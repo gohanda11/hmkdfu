@@ -264,7 +264,7 @@ var device = null;
   }
 
   /* ---------- UI state ---------- */
-  function setConnectedState(connected) {
+  function setConnectedState(connected, dev) {
     const statusBadge = document.querySelector('#deviceStatus');
     const statusText = document.querySelector('#statusText');
     const deviceInfo = document.querySelector('#deviceInfo');
@@ -275,16 +275,17 @@ var device = null;
     const flashBtn = document.querySelector('#flashBtn');
     const uploadBtn = document.querySelector('#uploadBtn');
 
-    if (connected) {
+    if (connected && dev) {
+      const protocol = dev.settings.alternate.interfaceProtocol;
       statusBadge.className = 'status-badge status-connected';
       statusBadge.textContent = 'Connected';
       connectBtn.textContent = 'Disconnect';
       connectHero.textContent = 'Disconnect';
       deviceInfo.classList.remove('hidden');
       dfuInfo.classList.remove('hidden');
-      detachBtn.disabled = device.settings.alternate.interfaceProtocol != 0x01;
-      flashBtn.disabled = device.settings.alternate.interfaceProtocol != 0x02 || selectedFirmwareBuffer === null;
-      uploadBtn.disabled = device.settings.alternate.interfaceProtocol != 0x02;
+      detachBtn.disabled = protocol != 0x01;
+      flashBtn.disabled = protocol != 0x02 || selectedFirmwareBuffer === null;
+      uploadBtn.disabled = protocol != 0x02;
       statusText.textContent = 'DFU device connected. Select a firmware and click Flash.';
     } else {
       statusBadge.className = 'status-badge status-idle';
@@ -333,19 +334,25 @@ var device = null;
 
   /* ---------- Connect ---------- */
   async function connect(targetDevice) {
+    console.log('[connect] Opening device...');
     try {
       await targetDevice.open();
+      console.log('[connect] Device opened');
     } catch (error) {
-      onDisconnect(formatError(error));
-      throw error;
+      console.error('[connect] open failed:', error);
+      const friendly = formatError(error);
+      onDisconnect(friendly);
+      throw new Error(friendly);
     }
 
     let props = {};
     try {
+      console.log('[connect] Reading DFU descriptor...');
       props = await getDFUDescriptorProperties(targetDevice);
+      console.log('[connect] DFU descriptor:', props);
     } catch (error) {
-      onDisconnect(formatError(error));
-      throw error;
+      console.warn('[connect] Failed to read DFU descriptor, continuing without it:', error);
+      logWarning('Could not read DFU functional descriptor; continuing with defaults.');
     }
 
     let memorySummary = '';
@@ -358,17 +365,23 @@ var device = null;
       manifestationTolerant = props.ManifestationTolerant;
 
       if (props.DFUVersion == 0x011a && targetDevice.settings.alternate.interfaceProtocol == 0x02) {
-        targetDevice = new dfuse.Device(targetDevice.device_, targetDevice.settings);
-        if (targetDevice.memoryInfo) {
-          const total = targetDevice.memoryInfo.segments.reduce((acc, s) => acc + (s.end - s.start), 0);
-          memorySummary = `Selected memory region: ${targetDevice.memoryInfo.name} (${niceSize(total)})`;
-          for (const segment of targetDevice.memoryInfo.segments) {
-            const propsList = [];
-            if (segment.readable) propsList.push('readable');
-            if (segment.erasable) propsList.push('erasable');
-            if (segment.writable) propsList.push('writable');
-            memorySummary += `\n${hexAddr8(segment.start)}-${hexAddr8(segment.end - 1)} (${propsList.join(', ') || 'inaccessible'})`;
+        try {
+          console.log('[connect] Device reports DfuSe, wrapping...');
+          targetDevice = new dfuse.Device(targetDevice.device_, targetDevice.settings);
+          if (targetDevice.memoryInfo) {
+            const total = targetDevice.memoryInfo.segments.reduce((acc, s) => acc + (s.end - s.start), 0);
+            memorySummary = `Selected memory region: ${targetDevice.memoryInfo.name} (${niceSize(total)})`;
+            for (const segment of targetDevice.memoryInfo.segments) {
+              const propsList = [];
+              if (segment.readable) propsList.push('readable');
+              if (segment.erasable) propsList.push('erasable');
+              if (segment.writable) propsList.push('writable');
+              memorySummary += `\n${hexAddr8(segment.start)}-${hexAddr8(segment.end - 1)} (${propsList.join(', ') || 'inaccessible'})`;
+            }
           }
+        } catch (dfuseError) {
+          console.warn('[connect] DfuSe wrap failed, continuing as standard DFU:', dfuseError);
+          logWarning('DfuSe memory map unavailable; using standard DFU mode.');
         }
       }
     }
@@ -384,7 +397,7 @@ var device = null;
     setLogContext(document.querySelector('#downloadLog'));
 
     updateDeviceInfo(targetDevice, props, memorySummary);
-    setConnectedState(true);
+    setConnectedState(true, targetDevice);
 
     if (isWindowsARM()) {
       logWarning('Windows on ARM detected: flashing may be very slow.');
@@ -416,6 +429,7 @@ var device = null;
 
   async function doConnect() {
     if (device) {
+      console.log('[doConnect] Disconnecting existing device');
       await device.close();
       onDisconnect();
       return;
@@ -427,16 +441,24 @@ var device = null;
       filters.push({ vendorId: vid });
       if (pid) filters[0].productId = pid;
     }
+    console.log('[doConnect] Requesting device with filters:', filters);
 
     try {
       const selectedDevice = await navigator.usb.requestDevice({ filters });
+      console.log('[doConnect] Selected device:', selectedDevice.productName, selectedDevice.vendorId, selectedDevice.productId);
+
       const interfaces = dfu.findDeviceDfuInterfaces(selectedDevice);
+      console.log('[doConnect] DFU interfaces found:', interfaces.length);
       if (interfaces.length == 0) {
         document.querySelector('#statusText').textContent = 'The selected device does not have any USB DFU interfaces.';
         return;
       }
 
-      await fixInterfaceNames(selectedDevice, interfaces);
+      try {
+        await fixInterfaceNames(selectedDevice, interfaces);
+      } catch (fixError) {
+        console.warn('[doConnect] fixInterfaceNames failed, continuing:', fixError);
+      }
 
       if (interfaces.length == 1) {
         device = await connect(new dfu.Device(selectedDevice, interfaces[0]));
@@ -444,6 +466,7 @@ var device = null;
         populateInterfaceDialog(selectedDevice, interfaces);
       }
     } catch (error) {
+      console.error('[doConnect] Error:', error);
       document.querySelector('#statusText').textContent = formatError(error);
     }
   }
