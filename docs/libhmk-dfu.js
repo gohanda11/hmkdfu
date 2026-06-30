@@ -430,6 +430,49 @@ var device = null;
     }
   }
 
+  function selectPreferredInterface(interfaces) {
+    const preferredName = '@Internal Flash /0x08000000/128*002Kg';
+    const preferred = interfaces.find(intf => intf.name && intf.name.includes(preferredName));
+    if (preferred) return preferred;
+    return interfaces[0];
+  }
+
+  async function tryAutoConnect() {
+    if (!document.querySelector('#autoConnect').checked) return false;
+    console.log('[tryAutoConnect] Auto-connect enabled, scanning permitted devices');
+
+    let permittedDevices;
+    try {
+      permittedDevices = await navigator.usb.getDevices();
+    } catch (error) {
+      console.warn('[tryAutoConnect] getDevices failed:', error);
+      return false;
+    }
+
+    const matchingDevices = permittedDevices.filter(d =>
+      d.productName && d.productName.includes('DFU in FS Mode')
+    );
+    console.log('[tryAutoConnect] Devices matching "DFU in FS Mode":', matchingDevices.length);
+
+    if (matchingDevices.length !== 1) return false;
+
+    const selectedDevice = matchingDevices[0];
+    const interfaces = dfu.findDeviceDfuInterfaces(selectedDevice);
+    if (interfaces.length === 0) return false;
+
+    try {
+      await fixInterfaceNames(selectedDevice, interfaces);
+    } catch (fixError) {
+      console.warn('[tryAutoConnect] fixInterfaceNames failed, continuing:', fixError);
+    }
+
+    const targetInterface = selectPreferredInterface(interfaces);
+    console.log('[tryAutoConnect] Auto-selecting interface:', formatDFUInterfaceAlternate(targetInterface));
+    document.querySelector('#statusText').textContent = `Auto-connecting to ${selectedDevice.productName}...`;
+    device = await connect(new dfu.Device(selectedDevice, targetInterface));
+    return true;
+  }
+
   async function doConnect() {
     if (device) {
       console.log('[doConnect] Disconnecting existing device');
@@ -437,6 +480,9 @@ var device = null;
       onDisconnect();
       return;
     }
+
+    const autoConnected = await tryAutoConnect();
+    if (autoConnected) return;
 
     const { vid } = parseVidPid();
     const filters = [];
@@ -642,6 +688,16 @@ var device = null;
         };
         reader.readAsArrayBuffer(e.target.files[0]);
       }
+    });
+
+    /* Auto Connect preference */
+    const autoConnectCheckbox = document.querySelector('#autoConnect');
+    const savedAutoConnect = localStorage.getItem('libhmk-autoconnect');
+    if (savedAutoConnect !== null) {
+      autoConnectCheckbox.checked = savedAutoConnect === 'true';
+    }
+    autoConnectCheckbox.addEventListener('change', () => {
+      localStorage.setItem('libhmk-autoconnect', autoConnectCheckbox.checked);
     });
   }
 
