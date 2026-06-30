@@ -155,11 +155,13 @@
             <div class="form-group">
               <label class="form-label" for="bootloaderPreset">Bootloader</label>
               <select id="bootloaderPreset">
+                <option value="all" selected>Show all devices (no filter)</option>
                 <option value="stm32">STM32 factory DFU (0x0483:0xDF11)</option>
                 <option value="at32">AT32F405 factory DFU (0x2E3C:0xDF11)</option>
                 <option value="dapboot">dapboot (0x1209:0xDB42)</option>
                 <option value="custom">Custom VID / PID</option>
               </select>
+              <span class="form-hint">Default matches original webdfu: no filter</span>
             </div>
             <div class="form-group">
               <label class="form-label" for="transferSize">Transfer Size</label>

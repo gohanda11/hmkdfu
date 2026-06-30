@@ -7,6 +7,7 @@ var device = null;
   const MANIFEST_URL = `https://raw.githubusercontent.com/${GITHUB_REPO}/${FIRMWARE_BRANCH}/manifest.json`;
 
   const PRESETS = {
+    all: null,
     stm32: { vid: 0x0483, pid: 0xDF11, name: 'STM32 factory DFU bootloader' },
     at32: { vid: 0x2E3C, pid: 0xDF11, name: 'AT32F405 factory DFU bootloader' },
     dapboot: { vid: 0x1209, pid: 0xDB42, name: 'dapboot' },
@@ -416,9 +417,14 @@ var device = null;
   }
 
   function applyBootloaderPreset() {
-    const preset = PRESETS[document.querySelector('#bootloaderPreset').value];
+    const key = document.querySelector('#bootloaderPreset').value;
+    const preset = PRESETS[key];
     const customRow = document.querySelector('#customVidPid');
-    if (preset) {
+    if (key === 'all') {
+      customRow.classList.add('hidden');
+      document.querySelector('#vid').value = '';
+      document.querySelector('#pid').value = '';
+    } else if (preset) {
       customRow.classList.add('hidden');
       document.querySelector('#vid').value = '0x' + hex4(preset.vid).toUpperCase();
       document.querySelector('#pid').value = '0x' + hex4(preset.pid).toUpperCase();
