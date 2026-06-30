@@ -274,7 +274,15 @@ var dfuse = {};
         try {
             await this.poll_until(state => (state == dfu.dfuMANIFEST));
         } catch (error) {
-            this.logError(error);
+            const msg = (error && error.message) ? error.message : String(error);
+            if (msg.includes('NetworkError') ||
+                msg.includes('NotFoundError') ||
+                msg.includes('Device unavailable') ||
+                msg.includes('device was disconnected')) {
+                this.logWarning('Device reset during manifestation; this is normal after a successful flash.');
+            } else {
+                this.logError(error);
+            }
         }
     }
 

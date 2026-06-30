@@ -635,8 +635,10 @@ var dfu = {};
                 }
             } catch (error) {
                 const errorMsg = (error && error.message) ? error.message : String(error);
-                if (errorMsg.endsWith("ControlTransferIn failed: NotFoundError: Device unavailable.") ||
-                    errorMsg.endsWith("ControlTransferIn failed: NotFoundError: The device was disconnected.")) {
+                if (errorMsg.includes("NetworkError") ||
+                    errorMsg.includes("NotFoundError") ||
+                    errorMsg.includes("Device unavailable") ||
+                    errorMsg.includes("device was disconnected")) {
                     this.logWarning("Unable to poll final manifestation status");
                 } else {
                     throw "Error during DFU manifest: " + error;
