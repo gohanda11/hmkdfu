@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>libhmk DFU Flasher</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="dfu.js"></script>
+    <script src="dfuse.js"></script>
+    <script src="FileSaver.js"></script>
+    <script src="libhmk-dfu.js"></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+            <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"></path>
+          </svg>
+        </div>
+        <span>libhmk DFU Flasher</span>
+      </div>
+      <div class="header-actions">
+        <a href="https://github.com/gohanda11/libhmk" target="_blank" class="icon-btn" aria-label="GitHub">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"></path>
+          </svg>
+        </a>
+        <button id="themeToggle" class="icon-btn" aria-label="Toggle theme">
+          <svg id="moonIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"></path>
+          </svg>
+          <svg id="sunIcon" class="hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="app-container">
+      <section class="hero">
+        <h1>libhmk Firmware Flasher</h1>
+        <p>WebUSB 経由で libhmk キーボードのファームウェアを書き込みます。</p>
+        <div style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
+          <button id="connectHero" class="btn btn-primary btn-lg">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 17h16M4 17v-4m16 4v-4M4 9V7a2 2 0 012-2h12a2 2 0 012 2v2M4 9h16M4 9v4m16-4v4"></path>
+            </svg>
+            Connect DFU Device
+          </button>
+          <a href="#firmware" class="btn btn-secondary btn-lg">Select Firmware</a>
+        </div>
+      </section>
+
+      <div id="platformWarning"></div>
+
+      <section class="card" id="deviceCard">
+        <div class="card-header">
+          <h2 class="card-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+            Device
+          </h2>
+          <span id="deviceStatus" class="status-badge status-idle">Not connected</span>
+        </div>
+        <div class="card-body">
+          <p class="text-muted" id="statusText">Connect your keyboard in DFU bootloader mode.</p>
+          <div id="deviceInfo" class="info-grid hidden">
+            <div class="info-item">
+              <div class="info-label">Name</div>
+              <div class="info-value" id="infoName">—</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Manufacturer</div>
+              <div class="info-value" id="infoMfg">—</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">VID:PID</div>
+              <div class="info-value" id="infoVidPid">—</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">Mode</div>
+              <div class="info-value" id="infoMode">—</div>
+            </div>
+          </div>
+          <div id="dfuInfo" class="log hidden" style="margin-top: 1rem;"></div>
+        </div>
+        <div class="card-footer">
+          <button id="detachBtn" class="btn btn-secondary" disabled>Detach DFU</button>
+          <button id="connectBtn" class="btn btn-primary">Connect</button>
+        </div>
+      </section>
+
+      <section class="card" id="firmwareCard">
+        <div class="card-header">
+          <h2 class="card-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="12" y1="18" x2="12" y2="12"></line>
+              <line x1="9" y1="15" x2="15" y2="15"></line>
+            </svg>
+            Firmware
+          </h2>
+        </div>
+        <div class="card-body">
+          <div class="source-tabs">
+            <button class="source-tab active" data-source="github">GitHub Latest</button>
+            <button class="source-tab" data-source="local">Local File</button>
+          </div>
+
+          <div id="githubSource">
+            <div class="form-group">
+              <label class="form-label" for="githubFirmwareSelect">Keyboard</label>
+              <select id="githubFirmwareSelect" disabled>
+                <option value="">Loading firmware list…</option>
+              </select>
+              <span class="form-hint">Latest split branch build from gohanda11/libhmk</span>
+            </div>
+            <div id="firmwareMeta" class="info-grid hidden">
+              <div class="info-item">
+                <div class="info-label">Commit</div>
+                <div class="info-value" id="metaCommit">—</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Size</div>
+                <div class="info-value" id="metaSize">—</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Built at</div>
+                <div class="info-value" id="metaBuilt">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div id="localSource" class="hidden">
+            <div class="form-group">
+              <label class="form-label" for="firmwareFile">Firmware File (.bin)</label>
+              <input type="file" id="firmwareFile" accept=".bin" />
+            </div>
+          </div>
+
+          <div class="two-col" style="margin-top: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="bootloaderPreset">Bootloader</label>
+              <select id="bootloaderPreset">
+                <option value="stm32">STM32 factory DFU (0x0483:0xDF11)</option>
+                <option value="at32">AT32F405 factory DFU (0x2E3C:0xDF11)</option>
+                <option value="dapboot">dapboot (0x1209:0xDB42)</option>
+                <option value="custom">Custom VID / PID</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="transferSize">Transfer Size</label>
+              <input type="number" id="transferSize" value="1024" min="8" step="8" />
+              <span class="form-hint">Auto-detected from descriptor when possible</span>
+            </div>
+          </div>
+
+          <div id="customVidPid" class="two-col hidden">
+            <div class="form-group">
+              <label class="form-label" for="vid">Vendor ID (hex)</label>
+              <input type="text" id="vid" value="0x0483" pattern="0x[A-Fa-f0-9]{1,4}" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="pid">Product ID (hex)</label>
+              <input type="text" id="pid" value="0xDF11" pattern="0x[A-Fa-f0-9]{1,4}" />
+            </div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <button id="uploadBtn" class="btn btn-secondary" disabled>Upload from Device</button>
+          <button id="flashBtn" class="btn btn-primary" disabled>Flash Firmware</button>
+        </div>
+      </section>
+
+      <section class="card" id="progressCard">
+        <div class="card-header">
+          <h2 class="card-title">Progress</h2>
+        </div>
+        <div class="card-body">
+          <div id="downloadLog" class="log"></div>
+          <div id="uploadLog" class="log hidden"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h2 class="card-title">Driver Help</h2>
+        </div>
+        <div class="card-body">
+          <p class="text-muted">WebUSB needs a WinUSB driver for the DFU device.</p>
+          <ul class="text-muted">
+            <li><strong>Windows x64:</strong> Install with <a href="https://zadig.akeo.ie/" target="_blank">Zadig</a> (Options → List All Devices → select STM32 BOOTLOADER → Replace Driver).</li>
+            <li><strong>Windows on ARM:</strong> Zadig does not work. Flash from another OS, or install WinUSB manually. See README for details.</li>
+          </ul>
+          <p class="text-muted">
+            <strong>Known issue:</strong> Windows on ARM Chromium browsers have severe USB transfer slowdowns (see <a href="https://issues.chromium.org/issues/494543570" target="_blank">Chromium issue 494543570</a>).
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>
+        Based on <a href="https://github.com/devanlai/webdfu" target="_blank">webdfu</a> ·
+        for <a href="https://github.com/gohanda11/libhmk" target="_blank">libhmk</a>
+      </p>
+    </footer>
+
+    <dialog id="interfaceDialog">
+      <h3 style="margin-top: 0;">Multiple DFU Interfaces</h3>
+      <p class="text-muted">Select one interface to use:</p>
+      <form id="interfaceForm" method="dialog">
+        <div id="interfaceList"></div>
+        <div class="card-footer" style="margin-top: 1rem; padding: 0;">
+          <button type="submit" class="btn btn-primary">Select</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>
