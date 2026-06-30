@@ -271,7 +271,6 @@ var device = null;
     const deviceInfo = document.querySelector('#deviceInfo');
     const dfuInfo = document.querySelector('#dfuInfo');
     const connectBtn = document.querySelector('#connectBtn');
-    const connectHero = document.querySelector('#connectHero');
     const detachBtn = document.querySelector('#detachBtn');
     const flashBtn = document.querySelector('#flashBtn');
     const uploadBtn = document.querySelector('#uploadBtn');
@@ -281,7 +280,6 @@ var device = null;
       statusBadge.className = 'status-badge status-connected';
       statusBadge.textContent = 'Connected';
       connectBtn.textContent = 'Disconnect';
-      connectHero.textContent = 'Disconnect';
       deviceInfo.classList.remove('hidden');
       dfuInfo.classList.remove('hidden');
       detachBtn.disabled = protocol != 0x01;
@@ -292,7 +290,6 @@ var device = null;
       statusBadge.className = 'status-badge status-idle';
       statusBadge.textContent = 'Not connected';
       connectBtn.textContent = 'Connect';
-      connectHero.textContent = 'Connect DFU Device';
       deviceInfo.classList.add('hidden');
       dfuInfo.classList.add('hidden');
       detachBtn.disabled = true;
@@ -571,7 +568,6 @@ var device = null;
   /* ---------- Event wiring ---------- */
   function initEventListeners() {
     document.querySelector('#connectBtn').addEventListener('click', doConnect);
-    document.querySelector('#connectHero').addEventListener('click', doConnect);
     document.querySelector('#detachBtn').addEventListener('click', async () => {
       if (!device) return;
       try {
@@ -668,7 +664,6 @@ var device = null;
     } else {
       document.querySelector('#statusText').textContent = 'WebUSB not available. Please use Chrome, Edge, or another Chromium-based browser.';
       document.querySelector('#connectBtn').disabled = true;
-      document.querySelector('#connectHero').disabled = true;
     }
   }
 
