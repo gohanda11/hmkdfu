@@ -512,6 +512,20 @@ var device = null;
 
       if (interfaces.length == 1) {
         device = await connect(new dfu.Device(selectedDevice, interfaces[0]));
+      } else if (document.querySelector('#autoConnect').checked) {
+        // After chooser, re-check permitted devices. If only one "DFU in FS Mode"
+        // device now exists, auto-select the preferred interface.
+        const permittedDevices = await navigator.usb.getDevices();
+        const matchingDevices = permittedDevices.filter(d =>
+          d.productName && d.productName.includes('DFU in FS Mode')
+        );
+        if (matchingDevices.length === 1) {
+          const targetInterface = selectPreferredInterface(interfaces);
+          console.log('[doConnect] Auto-selecting preferred interface after chooser:', formatDFUInterfaceAlternate(targetInterface));
+          device = await connect(new dfu.Device(selectedDevice, targetInterface));
+        } else {
+          populateInterfaceDialog(selectedDevice, interfaces);
+        }
       } else {
         populateInterfaceDialog(selectedDevice, interfaces);
       }
