@@ -435,11 +435,12 @@ var device = null;
       return;
     }
 
-    const { vid, pid } = parseVidPid();
+    const { vid } = parseVidPid();
     const filters = [];
-    if (vid) {
+    if (vid && !Number.isNaN(vid)) {
+      // Match original webdfu: filter by vendorId only so users can pick
+      // any DFU device from that vendor, even if the PID differs.
       filters.push({ vendorId: vid });
-      if (pid) filters[0].productId = pid;
     }
     console.log('[doConnect] Requesting device with filters:', filters);
 
