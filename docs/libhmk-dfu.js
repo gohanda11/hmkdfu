@@ -4,7 +4,14 @@ var device = null;
 
   const GITHUB_REPO = 'gohanda11/libhmk';
   const FIRMWARE_BRANCH = 'firmware';
-  const MANIFEST_URL = `https://raw.githubusercontent.com/${GITHUB_REPO}/${FIRMWARE_BRANCH}/manifest.json`;
+  const MANIFEST_URLS = {
+    stable: `https://raw.githubusercontent.com/${GITHUB_REPO}/${FIRMWARE_BRANCH}/manifest.json`,
+    dev: `https://raw.githubusercontent.com/${GITHUB_REPO}/${FIRMWARE_BRANCH}/manifest-dev.json`
+  };
+  const CHANNEL_HINTS = {
+    stable: '安定版ビルド (gohanda11/libhmk firmware ブランチ)',
+    dev: '開発版ビルド (gohanda11/libhmk firmware ブランチ manifest-dev.json)'
+  };
 
   const PRESETS = {
     all: null,
@@ -14,9 +21,13 @@ var device = null;
     custom: null
   };
 
-  let firmwareManifest = null;
+  // Channel-keyed manifests: { stable: manifest|null, dev: manifest|null }.
+  // manifest shape (contract): { version, version_text, channel, repository,
+  // branch, commit, built_at, changelog[], firmwares[] }. Legacy manifests
+  // without the extended fields are still accepted (meta falls back to '—').
+  let firmwareManifests = { stable: null, dev: null };
   let selectedFirmwareBuffer = null;
-  let firmwareSource = 'github';
+  let firmwareSource = 'stable';
   let transferSize = 1024;
   let manifestationTolerant = true;
   let currentLog = null;
@@ -143,32 +154,92 @@ var device = null;
     currentLog.scrollTop = currentLog.scrollHeight;
   }
 
-  /* ---------- Firmware manifest ---------- */
-  async function loadFirmwareManifest() {
-    const select = document.querySelector('#githubFirmwareSelect');
-    try {
-      const res = await fetch(MANIFEST_URL, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      firmwareManifest = await res.json();
+  /* ---------- Firmware manifest (stable / dev channels) ---------- */
+  function formatManifestVersion(manifest) {
+    if (!manifest) return '—';
+    if (manifest.version_text) return manifest.version_text;
+    if (typeof manifest.version === 'number') return '0x' + hex4(manifest.version);
+    return '—';
+  }
 
-      select.innerHTML = '<option value="">-- Select keyboard --</option>';
-      for (const fw of firmwareManifest.firmwares) {
+  function renderChannelInfo(channel) {
+    const manifest = firmwareManifests[channel];
+    const wrap = document.querySelector('#channelInfo');
+    if (!manifest) {
+      wrap.classList.add('hidden');
+      return;
+    }
+    document.querySelector('#channelVersion').textContent = formatManifestVersion(manifest);
+    document.querySelector('#channelBuilt').textContent = formatDate(manifest.built_at);
+    const changelog = Array.isArray(manifest.changelog) ? manifest.changelog : [];
+    const list = document.querySelector('#channelChangelog');
+    const details = document.querySelector('#channelChangelogWrap');
+    list.innerHTML = '';
+    if (changelog.length > 0) {
+      for (const entry of changelog) {
+        const li = document.createElement('li');
+        li.textContent = String(entry);
+        list.appendChild(li);
+      }
+      details.classList.remove('hidden');
+    } else {
+      details.classList.add('hidden');
+    }
+    const hint = document.querySelector('#githubHint');
+    if (hint && CHANNEL_HINTS[channel]) hint.textContent = CHANNEL_HINTS[channel];
+    wrap.classList.remove('hidden');
+  }
+
+  function populateKeyboardSelect(channel) {
+    const manifest = firmwareManifests[channel];
+    const select = document.querySelector('#githubFirmwareSelect');
+    select.innerHTML = '<option value="">-- Select keyboard --</option>';
+    if (manifest && Array.isArray(manifest.firmwares)) {
+      for (const fw of manifest.firmwares) {
         const opt = document.createElement('option');
         opt.value = fw.keyboard;
         opt.textContent = `${fw.keyboard}`;
         select.appendChild(opt);
       }
       select.disabled = false;
-    } catch (error) {
-      console.error(error);
-      select.innerHTML = '<option value="">Failed to load firmware list</option>';
+    } else {
       select.disabled = true;
-      logError('Failed to load firmware manifest from GitHub: ' + formatError(error));
     }
   }
 
-  async function fetchFirmwareBinary(keyboard) {
-    const fw = firmwareManifest && firmwareManifest.firmwares.find(f => f.keyboard === keyboard);
+  async function loadFirmwareManifest(channel) {
+    const select = document.querySelector('#githubFirmwareSelect');
+    const isActive = firmwareSource === channel;
+    if (isActive) {
+      select.innerHTML = '<option value="">Loading firmware list…</option>';
+      select.disabled = true;
+    }
+    try {
+      const res = await fetch(MANIFEST_URLS[channel], { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const manifest = await res.json();
+      if (!manifest || !Array.isArray(manifest.firmwares)) throw new Error('Invalid manifest format');
+      firmwareManifests[channel] = manifest;
+
+      if (firmwareSource !== channel) return manifest;
+      populateKeyboardSelect(channel);
+      renderChannelInfo(channel);
+      return manifest;
+    } catch (error) {
+      console.error(error);
+      if (firmwareSource !== channel) throw error;
+      select.innerHTML = '<option value="">Failed to load firmware list</option>';
+      select.disabled = true;
+      document.querySelector('#channelInfo').classList.add('hidden');
+      logError(`Failed to load ${channel} firmware manifest from GitHub: ` + formatError(error));
+      throw error;
+    }
+  }
+
+  async function fetchFirmwareBinary(keyboard, channel) {
+    const ch = channel || firmwareSource;
+    const manifest = firmwareManifests[ch];
+    const fw = manifest && manifest.firmwares.find(f => f.keyboard === keyboard);
     if (!fw) throw new Error('Firmware not found in manifest');
 
     const res = await fetch(fw.url, { cache: 'no-store' });
@@ -176,16 +247,18 @@ var device = null;
     return await res.arrayBuffer();
   }
 
-  function updateFirmwareMeta(keyboard) {
-    const fw = firmwareManifest && firmwareManifest.firmwares.find(f => f.keyboard === keyboard);
+  function updateFirmwareMeta(keyboard, channel) {
+    const ch = channel || firmwareSource;
+    const manifest = firmwareManifests[ch];
+    const fw = manifest && manifest.firmwares.find(f => f.keyboard === keyboard);
     const meta = document.querySelector('#firmwareMeta');
     if (!fw) {
       meta.classList.add('hidden');
       return;
     }
-    document.querySelector('#metaCommit').textContent = fw.commit.slice(0, 7);
-    document.querySelector('#metaSize').textContent = niceSize(fw.size);
-    document.querySelector('#metaBuilt').textContent = formatDate(fw.built_at);
+    document.querySelector('#metaCommit').textContent = (fw.commit || manifest.commit || '').slice(0, 7) || '—';
+    document.querySelector('#metaSize').textContent = typeof fw.size === 'number' ? niceSize(fw.size) : '—';
+    document.querySelector('#metaBuilt').textContent = formatDate(fw.built_at || manifest.built_at);
     meta.classList.remove('hidden');
   }
 
@@ -656,32 +729,48 @@ var device = null;
       applyBootloaderPreset();
     });
 
-    /* Source tabs */
+    /* Source tabs: stable / dev / local */
     document.querySelectorAll('.source-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
+      tab.addEventListener('click', async () => {
         document.querySelectorAll('.source-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
-        firmwareSource = tab.dataset.source;
-        document.querySelector('#githubSource').classList.toggle('hidden', firmwareSource !== 'github');
-        document.querySelector('#localSource').classList.toggle('hidden', firmwareSource !== 'local');
+        // Legacy value 'github' maps to the stable channel.
+        firmwareSource = tab.dataset.source === 'github' ? 'stable' : tab.dataset.source;
+        const isRemote = firmwareSource === 'stable' || firmwareSource === 'dev';
+        document.querySelector('#githubSource').classList.toggle('hidden', !isRemote);
+        document.querySelector('#localSource').classList.toggle('hidden', isRemote);
         selectedFirmwareBuffer = null;
-        document.querySelector('#flashBtn').disabled = !(device && device.device_.opened);
+        document.querySelector('#firmwareMeta').classList.add('hidden');
+        document.querySelector('#flashBtn').disabled = true;
+        if (!isRemote) return;
+        if (firmwareManifests[firmwareSource]) {
+          populateKeyboardSelect(firmwareSource);
+          renderChannelInfo(firmwareSource);
+          return;
+        }
+        setLogContext(document.querySelector('#downloadLog'));
+        try {
+          await loadFirmwareManifest(firmwareSource);
+        } catch (error) {
+          // loadFirmwareManifest already reported the failure to the log.
+        }
       });
     });
 
-    /* GitHub firmware select */
+    /* GitHub firmware select (shared by stable / dev) */
     document.querySelector('#githubFirmwareSelect').addEventListener('change', async (e) => {
       const keyboard = e.target.value;
-      updateFirmwareMeta(keyboard);
+      const channel = firmwareSource === 'dev' ? 'dev' : 'stable';
+      updateFirmwareMeta(keyboard, channel);
       if (!keyboard) {
         selectedFirmwareBuffer = null;
         document.querySelector('#flashBtn').disabled = true;
         return;
       }
       setLogContext(document.querySelector('#downloadLog'));
-      logInfo(`Loading ${keyboard} firmware from GitHub...`);
+      logInfo(`Loading ${keyboard} firmware from GitHub (${channel})...`);
       try {
-        selectedFirmwareBuffer = await fetchFirmwareBinary(keyboard);
+        selectedFirmwareBuffer = await fetchFirmwareBinary(keyboard, channel);
         logSuccess(`Loaded ${niceSize(selectedFirmwareBuffer.byteLength)}`);
         document.querySelector('#flashBtn').disabled = !(device && device.device_.opened);
       } catch (error) {
@@ -694,13 +783,21 @@ var device = null;
     /* Local firmware file */
     document.querySelector('#firmwareFile').addEventListener('change', (e) => {
       selectedFirmwareBuffer = null;
+      const meta = document.querySelector('#localMeta');
       if (e.target.files.length > 0) {
+        const file = e.target.files[0];
+        document.querySelector('#localName').textContent = file.name;
+        document.querySelector('#localSize').textContent = niceSize(file.size);
+        meta.classList.remove('hidden');
         const reader = new FileReader();
         reader.onload = () => {
           selectedFirmwareBuffer = reader.result;
           document.querySelector('#flashBtn').disabled = !(device && device.device_.opened);
         };
-        reader.readAsArrayBuffer(e.target.files[0]);
+        reader.readAsArrayBuffer(file);
+      } else {
+        meta.classList.add('hidden');
+        document.querySelector('#flashBtn').disabled = true;
       }
     });
 
@@ -730,7 +827,7 @@ var device = null;
   function initWebUSB() {
     if (typeof navigator.usb !== 'undefined') {
       navigator.usb.addEventListener('disconnect', onUnexpectedDisconnect);
-      loadFirmwareManifest();
+      loadFirmwareManifest('stable').catch(() => {});
     } else {
       document.querySelector('#statusText').textContent = 'WebUSB not available. Please use Chrome, Edge, or another Chromium-based browser.';
       document.querySelector('#connectBtn').disabled = true;

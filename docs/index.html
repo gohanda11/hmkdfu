@@ -114,20 +114,36 @@
           </h2>
         </div>
         <div class="card-body">
-          <div class="source-tabs">
-            <button class="source-tab active" data-source="github">GitHub Latest</button>
-            <button class="source-tab" data-source="local">Local File</button>
+          <div class="source-tabs" role="tablist" aria-label="ファームウェア取得元">
+            <button class="source-tab active" data-source="stable" role="tab">安定版 (Stable)</button>
+            <button class="source-tab" data-source="dev" role="tab">開発版 (Dev)</button>
+            <button class="source-tab" data-source="local" role="tab">ローカルファイル</button>
           </div>
-
           <div id="githubSource">
             <div class="form-group">
               <label class="form-label" for="githubFirmwareSelect">Keyboard</label>
               <select id="githubFirmwareSelect" disabled>
                 <option value="">Loading firmware list…</option>
               </select>
-              <span class="form-hint">Latest split branch build from gohanda11/libhmk</span>
+              <span class="form-hint" id="githubHint">安定版ビルド (gohanda11/libhmk firmware ブランチ)</span>
             </div>
-            <div id="firmwareMeta" class="info-grid hidden">
+            <div id="channelInfo" class="hidden">
+              <div class="info-grid">
+                <div class="info-item">
+                  <div class="info-label">Version</div>
+                  <div class="info-value" id="channelVersion">—</div>
+                </div>
+                <div class="info-item">
+                  <div class="info-label">Built at</div>
+                  <div class="info-value" id="channelBuilt">—</div>
+                </div>
+              </div>
+              <details id="channelChangelogWrap" class="hidden" style="margin-top: 0.5rem;">
+                <summary class="text-muted" style="cursor: pointer;">変更内容 (changelog)</summary>
+                <ul id="channelChangelog" class="text-muted" style="margin: 0.5rem 0 0; padding-left: 1.25rem;"></ul>
+              </details>
+            </div>
+            <div id="firmwareMeta" class="info-grid hidden" style="margin-top: 1rem;">
               <div class="info-item">
                 <div class="info-label">Commit</div>
                 <div class="info-value" id="metaCommit">—</div>
@@ -147,6 +163,17 @@
             <div class="form-group">
               <label class="form-label" for="firmwareFile">Firmware File (.bin)</label>
               <input type="file" id="firmwareFile" accept=".bin" />
+              <span class="form-hint">ローカルファイルではバージョン・changelog は表示されません。</span>
+            </div>
+            <div id="localMeta" class="info-grid hidden">
+              <div class="info-item">
+                <div class="info-label">File</div>
+                <div class="info-value" id="localName">—</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Size</div>
+                <div class="info-value" id="localSize">—</div>
+              </div>
             </div>
           </div>
 
